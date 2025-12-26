@@ -1,7 +1,11 @@
 """
 RESOURCES.PY - Analyseur de gaspillage de ressources
 
-Détecte les containers sur-provisionnés et calcule les coûts
+Prix utilisés (Décembre 2025) :
+- CPU : €0.04/vCPU/heure (moyenne AWS c5, GCP n1, Azure B)
+- RAM : €0.005/GB/heure (conservative)
+
+Méthodologie complète : docs/PRICING.md
 """
 
 from dataclasses import dataclass
@@ -37,8 +41,8 @@ class ResourceAnalyzer:
     """
     
     # Prix moyens cloud (€/heure)
-    COST_PER_CPU_HOUR = 0.04        # €/vCPU/h
-    COST_PER_GB_HOUR = 0.005        # €/GB/h
+    COST_PER_CPU_HOUR = 0.025    
+    COST_PER_GB_HOUR = 0.008      
     
     # Conversion mensuel (730h = moyenne mois)
     HOURS_PER_MONTH = 730
