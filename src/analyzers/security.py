@@ -263,7 +263,7 @@ class SecurityAnalyzer:
     def _check_security_opts(self) -> List[SecurityIssue]:
         """Check les security options (AppArmor, SELinux, Seccomp)"""
         issues = []
-        sec_opts = self.inspect['HostConfig'].get('SecurityOpt', [])
+        sec_opts = self.inspect['HostConfig'].get('SecurityOpt') or []
         
         # Check si AppArmor désactivé
         if 'apparmor=unconfined' in sec_opts:
