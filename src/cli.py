@@ -1,5 +1,5 @@
 """
-CLI.PY - Point d'entrée avec analyse de gaspillage
+CLI.PY - Point d'entrée avec analyse ressources + sécurité
 """
 
 import click
@@ -10,8 +10,9 @@ from rich import box
 import docker
 import sys
 
-# Import de notre analyseur
+# Imports des analyseurs
 from analyzers.resources import ResourceAnalyzer
+from analyzers.security import SecurityAnalyzer, Severity
 
 console = Console()
 
@@ -22,7 +23,7 @@ def cli():
     pass
 
 @cli.command()
-@click.option('--detailed', is_flag=True, help='Analyse détaillée avec gaspillage')
+@click.option('--detailed', is_flag=True, help='Analyse détaillée (ressources + sécurité)')
 def scan(detailed):
     """Scanner tous les containers"""
     
@@ -46,23 +47,19 @@ def scan(detailed):
     
     if not containers:
         console.print("[yellow]⚠[/yellow] Aucun container running\n")
+        console.print("[dim]Lancez un container de test :[/dim]")
+        console.print("[dim]  docker run -d --name test nginx:alpine[/dim]\n")
         sys.exit(0)
     
     console.print(f"[green]✓[/green] Trouvé {len(containers)} container(s)\n")
     
-    # ═══════════════════════════════════════════════════════════
-    # Analyse basique OU détaillée
-    # ═══════════════════════════════════════════════════════════
-    
     if not detailed:
-        # ─────── Mode basique (rapide) ───────
         _show_basic_table(containers)
     else:
-        # ─────── Mode détaillé (avec gaspillage) ───────
         _show_detailed_analysis(containers)
 
 def _show_basic_table(containers):
-    """Affichage rapide sans analyse gaspillage"""
+    """Affichage rapide sans analyse"""
     
     table = Table(show_header=True, header_style="bold magenta", box=box.ROUNDED)
     table.add_column("Container", style="cyan", width=20)
@@ -131,20 +128,23 @@ def _show_basic_table(containers):
     console.print()
 
 def _show_detailed_analysis(containers):
-    """Analyse détaillée avec détection gaspillage"""
+    """Analyse détaillée : ressources + sécurité"""
     
     console.print("[bold cyan]🔬 Analyse détaillée en cours...[/bold cyan]\n")
+    
+    # ═══════════════════════════════════════════════════════════
+    # PHASE 1 : Analyse RESSOURCES
+    # ═══════════════════════════════════════════════════════════
+    
+    console.print("[dim]Phase 1/2 : Analyse des ressources...[/dim]\n")
     
     total_waste_cost = 0
     containers_with_waste = []
     
     for i, container in enumerate(containers, 1):
-        console.print(f"[dim]Analyse {i}/{len(containers)}: {container.name}...[/dim]")
+        console.print(f"[dim]  Ressources {i}/{len(containers)}: {container.name}...[/dim]")
         
-        # Créer l'analyseur
         analyzer = ResourceAnalyzer(container)
-        
-        # Analyser (collecte 3 échantillons)
         wastes = analyzer.analyze()
         
         if wastes:
@@ -153,26 +153,55 @@ def _show_detailed_analysis(containers):
                 'wastes': wastes
             })
             
-            # Accumuler coûts
             for waste in wastes.values():
                 total_waste_cost += waste.monthly_cost_waste
     
     console.print()
     
     # ═══════════════════════════════════════════════════════════
-    # Afficher résultats
+    # PHASE 2 : Analyse SÉCURITÉ
     # ═══════════════════════════════════════════════════════════
     
-    if not containers_with_waste:
-        console.print(Panel(
-            "[green]✓ Aucun gaspillage majeur détecté ![/green]\n"
-            "Tous vos containers sont bien dimensionnés.",
-            title="🎉 Excellent",
-            border_style="green"
-        ))
-    else:
-        # Tableau des gaspillages
-        table = Table(title="⚠️  Gaspillages détectés", box=box.ROUNDED)
+    console.print("[dim]Phase 2/2 : Analyse de sécurité...[/dim]\n")
+    
+    containers_with_issues = []
+    total_critical = 0
+    total_high = 0
+    total_medium = 0
+    
+    for i, container in enumerate(containers, 1):
+        console.print(f"[dim]  Sécurité {i}/{len(containers)}: {container.name}...[/dim]")
+        
+        sec_analyzer = SecurityAnalyzer(container)
+        issues = sec_analyzer.analyze()
+        
+        if issues:
+            containers_with_issues.append({
+                'name': container.name,
+                'issues': issues
+            })
+            
+            # Compter par sévérité
+            for issue in issues:
+                if issue.severity == Severity.CRITICAL:
+                    total_critical += 1
+                elif issue.severity == Severity.HIGH:
+                    total_high += 1
+                elif issue.severity == Severity.MEDIUM:
+                    total_medium += 1
+    
+    console.print()
+    console.print("─" * 80)
+    console.print()
+    
+    # ═══════════════════════════════════════════════════════════
+    # AFFICHAGE : Gaspillage ressources
+    # ═══════════════════════════════════════════════════════════
+    
+    if containers_with_waste:
+        console.print("[bold yellow]💰 GASPILLAGE DE RESSOURCES[/bold yellow]\n")
+        
+        table = Table(box=box.ROUNDED)
         table.add_column("Container", style="cyan")
         table.add_column("Ressource", style="yellow")
         table.add_column("Alloué", justify="right")
@@ -193,35 +222,95 @@ def _show_detailed_analysis(containers):
                     f"€{waste.monthly_cost_waste:.2f}"
                 )
         
-        console.print()
         console.print(table)
         console.print()
+    else:
+        console.print("[green]✓ Pas de gaspillage ressources détecté[/green]\n")
+    
+    # ═══════════════════════════════════════════════════════════
+    # AFFICHAGE : Issues de sécurité
+    # ═══════════════════════════════════════════════════════════
+    
+    if containers_with_issues:
+        console.print("[bold red]🔒 PROBLÈMES DE SÉCURITÉ[/bold red]\n")
         
-        # Recommandations
-        console.print(Panel.fit(
-            "[bold yellow]💡 Recommandations[/bold yellow]",
+        for item in containers_with_issues:
+            console.print(f"[bold cyan]Container: {item['name']}[/bold cyan]")
+            console.print()
+            
+            for issue in item['issues']:
+                # Couleur selon sévérité
+                if issue.severity == Severity.CRITICAL:
+                    color = "red bold"
+                    icon = "🔴"
+                elif issue.severity == Severity.HIGH:
+                    color = "red"
+                    icon = "🟠"
+                elif issue.severity == Severity.MEDIUM:
+                    color = "yellow"
+                    icon = "🟡"
+                else:
+                    color = "blue"
+                    icon = "🔵"
+                
+                console.print(f"  {icon} [{color}][{issue.severity.value}][/{color}] {issue.title}")
+                console.print(f"     [dim]Impact : {issue.impact}[/dim]")
+                console.print(f"     [green]Fix : {issue.recommendation}[/green]")
+                console.print()
+        
+        console.print()
+    else:
+        console.print("[green]✓ Aucun problème de sécurité majeur détecté[/green]\n")
+    
+    # ═══════════════════════════════════════════════════════════
+    # RÉSUMÉ FINAL
+    # ═══════════════════════════════════════════════════════════
+    
+    console.print("─" * 80)
+    console.print()
+    
+    # Résumé ressources
+    if containers_with_waste:
+        console.print(Panel(
+            f"[bold]💰 Impact financier[/bold]\n\n"
+            f"• Containers avec gaspillage : {len(containers_with_waste)}/{len(containers)}\n"
+            f"• [red bold]Coût gaspillé : €{total_waste_cost:.2f}/mois[/red bold]\n"
+            f"• [green bold]Économie annuelle potentielle : €{total_waste_cost * 12:.2f}[/green bold]",
             border_style="yellow"
         ))
         console.print()
+    
+    # Résumé sécurité
+    if containers_with_issues:
+        total_issues = total_critical + total_high + total_medium
         
-        for item in containers_with_waste:
-            console.print(f"[cyan]Container: {item['name']}[/cyan]")
-            for waste in item['wastes'].values():
-                console.print(f"  • {waste.recommendation}")
-            console.print()
+        severity_text = ""
+        if total_critical > 0:
+            severity_text += f"• [red bold]CRITICAL : {total_critical}[/red bold]\n"
+        if total_high > 0:
+            severity_text += f"• [red]HIGH : {total_high}[/red]\n"
+        if total_medium > 0:
+            severity_text += f"• [yellow]MEDIUM : {total_medium}[/yellow]\n"
         
-        # Résumé final
         console.print(Panel(
-            f"[bold]Résumé financier[/bold]\n\n"
-            f"• Containers analysés : {len(containers)}\n"
-            f"• Containers avec gaspillage : {len(containers_with_waste)}\n"
-            f"• [red bold]Coût gaspillé total : €{total_waste_cost:.2f}/mois[/red bold]\n\n"
-            f"💰 Économie potentielle annuelle : [green bold]€{total_waste_cost * 12:.2f}[/green bold]",
-            title="💸 Impact financier",
+            f"[bold]🔒 Risques de sécurité[/bold]\n\n"
+            f"• Containers avec issues : {len(containers_with_issues)}/{len(containers)}\n"
+            f"• Total issues : {total_issues}\n\n"
+            f"{severity_text}",
             border_style="red"
         ))
+        console.print()
     
-    console.print()
+    # Message final
+    if not containers_with_waste and not containers_with_issues:
+        console.print(Panel(
+            "[green bold]🎉 EXCELLENT ![/green bold]\n\n"
+            "Vos containers sont bien configurés :\n"
+            "• ✓ Ressources optimisées\n"
+            "• ✓ Sécurité correcte",
+            border_style="green"
+        ))
+        console.print()
 
 if __name__ == "__main__":
     cli()
