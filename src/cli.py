@@ -181,6 +181,7 @@ def trends(container_name, days):
     """
     db = MetricsDB()
     
+    
     if container_name is None:
         # List all containers
         containers = db.get_all_containers()
