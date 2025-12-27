@@ -8,9 +8,9 @@ import docker
 from rich.console import Console
 from datetime import datetime
 
-from ..analyzers.resources import ResourceAnalyzer
-from ..analyzers.security import SecurityAnalyzer, Severity
-from .database import MetricsDB
+from analyzers.resources import ResourceAnalyzer
+from analyzers.security import SecurityAnalyzer, Severity
+from monitoring.database import MetricsDB
 
 
 console = Console()
