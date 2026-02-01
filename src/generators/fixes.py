@@ -37,7 +37,7 @@ class FixGenerator:
         if wastes:
             if 'memory' in wastes:
                 w = wastes['memory']
-                new_memory_mb = int(w.used * 1.5)
+                new_memory_mb = max(128, int(w.used * 1024 * 1.5))
                 new_memory = f"{new_memory_mb}m"
                 savings += w.monthly_cost_waste
                 lines.append(f"# Memory: {w.allocated:.1f}GB → {new_memory_mb/1024:.2f}GB (saves €{w.monthly_cost_waste:.2f}/mo)")
