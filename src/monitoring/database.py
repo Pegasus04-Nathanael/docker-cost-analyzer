@@ -72,16 +72,16 @@ class MetricsDB:
                   cpu_percent, memory_usage_mb, memory_limit_mb,
                   waste_cpu_cost, waste_memory_cost))
     
-    def get_history(self, container_id: str, days: int = 7) -> List[Dict]:
-        """Get metrics history for container"""
+    def get_history(self, container_name: str, days: int = 7) -> List[Dict]:
+        """Get metrics history for container by name"""
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute("""
                 SELECT * FROM metrics
-                WHERE container_id = ?
-                  AND timestamp >= datetime('now', '-' || ? || ' days')
+                WHERE container_name = ?
+                AND timestamp >= datetime('now', '-' || ? || ' days')
                 ORDER BY timestamp DESC
-            """, (container_id, days))
+            """, (container_name, days))
             
             return [dict(row) for row in cursor.fetchall()]
     
